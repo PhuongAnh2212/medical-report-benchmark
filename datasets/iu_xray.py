@@ -49,7 +49,8 @@ def load(config: Dict[str, Any]) -> pd.DataFrame:
         ValueError: If required columns are missing from reports_csv.
     """
     ds_cfg = config["dataset"]
-    reports_csv = resolve_path(ds_cfg["reports_csv"])
+    reports_csv = os.path.join(root, "indiana_reports.csv")
+    projections_csv = os.path.join(root, "indiana_projections.csv")
     images_dir = resolve_path(ds_cfg["images_dir"])
 
     if not reports_csv.exists():
