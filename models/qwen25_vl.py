@@ -1,15 +1,25 @@
 """
 models/qwen25_vl.py
 
-Wrapper for Qwen2.5-VL (e.g. Qwen/Qwen2.5-VL-7B-Instruct) implementing the
-BaseReportGenerator interface.
+Wrapper for the Qwen VL model family implementing the BaseReportGenerator
+interface. Supports both:
+
+    Qwen/Qwen2-VL-*-Instruct      -> Qwen2VLForConditionalGeneration
+    Qwen/Qwen2.5-VL-*-Instruct    -> Qwen2_5_VLForConditionalGeneration
+
+The checkpoint id is read from configs/models.yaml (injected into
+config["model"]["checkpoint"] by models.build_model). The architecture is
+detected automatically from that checkpoint id -- see `_detect_architecture`
+-- since the two families are distinct model classes in `transformers` and
+loading a Qwen2-VL checkpoint with the 2.5 class (or vice versa) raises
+"You are using a model of type ... to instantiate a model of type ...".
 
 Requires:
     pip install transformers accelerate qwen-vl-utils
 
-Note: Qwen2.5-VL ships as `Qwen2_5_VLForConditionalGeneration` in recent
-`transformers` releases. If you hit an ImportError, upgrade transformers
-(see requirements.txt for the minimum tested version).
+Note: both classes require a sufficiently recent `transformers` release.
+If you hit an ImportError, upgrade transformers (see requirements.txt for
+the minimum tested version).
 """
 
 from __future__ import annotations
@@ -30,24 +40,75 @@ _DTYPE_MAP = {
     "bfloat16": torch.bfloat16,
 }
 
+# Substring markers used to detect the Qwen VL architecture family from a
+# checkpoint id. Checked in this order; "Qwen2.5-VL" and "Qwen2-VL" never
+# both match a single checkpoint id, so ordering is not load-bearing here,
+# but 2.5 is checked first since it's this module's original/default family.
+_ARCHITECTURE_MARKERS: tuple[tuple[str, str], ...] = (
+    ("Qwen2.5-VL", "qwen2_5_vl"),
+    ("Qwen2-VL", "qwen2_vl"),
+)
+
+
+def _detect_architecture(checkpoint: str) -> str:
+    """Infer the Qwen VL architecture family from a checkpoint id.
+
+    Args:
+        checkpoint: HuggingFace checkpoint id, e.g.
+            "Qwen/Qwen2.5-VL-7B-Instruct" or "Qwen/Qwen2-VL-2B-Instruct".
+
+    Returns:
+        "qwen2_5_vl" or "qwen2_vl".
+
+    Raises:
+        ValueError: If the checkpoint id matches neither known family.
+    """
+    for marker, architecture in _ARCHITECTURE_MARKERS:
+        if marker in checkpoint:
+            return architecture
+
+    raise ValueError(
+        f"Could not detect the Qwen VL architecture from checkpoint "
+        f"'{checkpoint}'. Expected the checkpoint id to contain 'Qwen2.5-VL' "
+        "or 'Qwen2-VL' (e.g. 'Qwen/Qwen2.5-VL-7B-Instruct' or "
+        "'Qwen/Qwen2-VL-2B-Instruct')."
+    )
+
 
 class Qwen25VLReportGenerator(BaseReportGenerator):
-    """Report generator backed by Qwen2.5-VL-Instruct."""
+    """Report generator backed by Qwen2-VL or Qwen2.5-VL (auto-detected)."""
 
     def __init__(self, config: Dict[str, Any], prompt_template: str) -> None:
         super().__init__(config, prompt_template)
         self.checkpoint = self.model_cfg.get("checkpoint", "Qwen/Qwen2.5-VL-7B-Instruct")
 
     def load(self) -> None:
-        """Load the Qwen2.5-VL model and processor onto the configured device."""
-        from transformers import AutoProcessor, Qwen2_5_VLForConditionalGeneration
+        """Load the Qwen VL model and processor onto the configured device.
+
+        Automatically picks `Qwen2VLForConditionalGeneration` or
+        `Qwen2_5_VLForConditionalGeneration` based on `self.checkpoint`.
+        """
+        architecture = _detect_architecture(self.checkpoint)
 
         device = self.model_cfg.get("device", "cuda" if torch.cuda.is_available() else "cpu")
         dtype = _DTYPE_MAP.get(self.model_cfg.get("dtype", "bfloat16"), torch.bfloat16)
 
-        logger.info("Loading Qwen2.5-VL checkpoint '%s' on %s (%s)", self.checkpoint, device, dtype)
+        if architecture == "qwen2_vl":
+            from transformers import AutoProcessor, Qwen2VLForConditionalGeneration
 
-        self._model = Qwen2_5_VLForConditionalGeneration.from_pretrained(
+            logger.info("Detected architecture: Qwen2-VL")
+            logger.info("Loading Qwen2VLForConditionalGeneration")
+            model_class = Qwen2VLForConditionalGeneration
+        else:
+            from transformers import AutoProcessor, Qwen2_5_VLForConditionalGeneration
+
+            logger.info("Detected architecture: Qwen2.5-VL")
+            logger.info("Loading Qwen2_5_VLForConditionalGeneration")
+            model_class = Qwen2_5_VLForConditionalGeneration
+
+        logger.info("Loading checkpoint '%s' on %s (%s)", self.checkpoint, device, dtype)
+
+        self._model = model_class.from_pretrained(
             self.checkpoint,
             torch_dtype=dtype,
             device_map=device,
