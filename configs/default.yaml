@@ -30,6 +30,10 @@ dataset:
 model:
   name: "qwen25_vl"                   # must match a key in configs/models.yaml
   device: "cuda"                      # cuda | cpu | mps
+  device_map: null                    # null = auto-detect: "auto" (shard across all visible GPUs,
+                                       # e.g. Kaggle's GPU T4 x2) if device=cuda and >1 GPU is visible,
+                                       # else the single `device` above. Set explicitly (e.g. "cuda:0")
+                                       # to force single-GPU placement even with multiple GPUs visible.
   dtype: "bfloat16"                   # float32 | float16 | bfloat16
   batch_size: 1                       # most VLMs are run with batch_size=1 for simplicity
   max_new_tokens: 512

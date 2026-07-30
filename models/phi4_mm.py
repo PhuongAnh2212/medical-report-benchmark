@@ -50,21 +50,24 @@ class Phi4MMReportGenerator(BaseReportGenerator):
         """Load Phi-4 Multimodal, the processor, and activate the vision LoRA adapter."""
         from transformers import AutoModelForCausalLM, AutoProcessor
 
-        device = self.model_cfg.get("device", "cuda" if torch.cuda.is_available() else "cpu")
+        device_map = self.resolve_device_map()
         dtype = _DTYPE_MAP.get(self.model_cfg.get("dtype", "bfloat16"), torch.bfloat16)
 
-        logger.info("Loading Phi-4 Multimodal checkpoint '%s' on %s (%s)", self.checkpoint, device, dtype)
+        logger.info(
+            "Loading Phi-4 Multimodal checkpoint '%s' on device_map=%s (%s)",
+            self.checkpoint, device_map, dtype,
+        )
 
         self._processor = AutoProcessor.from_pretrained(self.checkpoint)
         self._model = AutoModelForCausalLM.from_pretrained(
-            self.checkpoint, torch_dtype=dtype, device_map=device
+            self.checkpoint, torch_dtype=dtype, device_map=device_map
         )
 
         logger.info("Loading and activating the '%s' LoRA adapter", _VISION_ADAPTER_NAME)
         self._model.load_adapter(
             self.checkpoint,
             adapter_name=_VISION_ADAPTER_NAME,
-            device_map=device,
+            device_map=device_map,
             adapter_kwargs={"subfolder": _VISION_ADAPTER_SUBFOLDER},
         )
         self._model.set_adapter(_VISION_ADAPTER_NAME)

@@ -160,25 +160,29 @@ class InternVL3ReportGenerator(BaseReportGenerator):
         """Load the InternVL3 model and tokenizer onto the configured device."""
         from transformers import AutoModel, AutoTokenizer
 
-        device = self.model_cfg.get("device", "cuda" if torch.cuda.is_available() else "cpu")
+        device_map = self.resolve_device_map()
         dtype = _DTYPE_MAP.get(self.model_cfg.get("dtype", "bfloat16"), torch.bfloat16)
 
-        logger.info("Loading InternVL checkpoint '%s' on %s (%s)", self.checkpoint, device, dtype)
+        logger.info(
+            "Loading InternVL checkpoint '%s' on device_map=%s (%s)", self.checkpoint, device_map, dtype
+        )
 
         # low_cpu_mem_usage=False: see the module docstring -- InternVL's
         # trust_remote_code modeling code calls .item() on a buffer during
         # __init__, which crashes ("Tensor.item() cannot be called on meta
         # tensors") under transformers' default meta-device fast-init path.
-        self._model = (
-            AutoModel.from_pretrained(
-                self.checkpoint,
-                torch_dtype=dtype,
-                trust_remote_code=True,
-                low_cpu_mem_usage=False,
-            )
-            .eval()
-            .to(device)
-        )
+        # Because of this, from_pretrained's own `device_map` dispatch can't
+        # be used (passing it would force the meta-init path back on) --
+        # the model is fully materialized first, then placed/sharded via
+        # BaseReportGenerator.place_model (accelerate's dispatch_model,
+        # which needs no meta-init).
+        model = AutoModel.from_pretrained(
+            self.checkpoint,
+            torch_dtype=dtype,
+            trust_remote_code=True,
+            low_cpu_mem_usage=False,
+        ).eval()
+        self._model = self.place_model(model, device_map)
         self._processor = AutoTokenizer.from_pretrained(
             self.checkpoint, trust_remote_code=True, use_fast=False
         )

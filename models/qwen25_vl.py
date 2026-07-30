@@ -101,7 +101,7 @@ class Qwen25VLReportGenerator(BaseReportGenerator):
         """
         architecture = _detect_architecture(self.checkpoint)
 
-        device = self.model_cfg.get("device", "cuda" if torch.cuda.is_available() else "cpu")
+        device_map = self.resolve_device_map()
         dtype = _DTYPE_MAP.get(self.model_cfg.get("dtype", "bfloat16"), torch.bfloat16)
 
         if architecture == "qwen2_vl":
@@ -117,12 +117,12 @@ class Qwen25VLReportGenerator(BaseReportGenerator):
             logger.info("Loading Qwen2_5_VLForConditionalGeneration")
             model_class = Qwen2_5_VLForConditionalGeneration
 
-        logger.info("Loading checkpoint '%s' on %s (%s)", self.checkpoint, device, dtype)
+        logger.info("Loading checkpoint '%s' on device_map=%s (%s)", self.checkpoint, device_map, dtype)
 
         self._model = model_class.from_pretrained(
             self.checkpoint,
             torch_dtype=dtype,
-            device_map=device,
+            device_map=device_map,
         )
 
         # Bound vision tokens so a large input image can't blow up attention

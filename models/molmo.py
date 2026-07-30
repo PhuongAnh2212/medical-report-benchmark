@@ -46,10 +46,12 @@ class MolmoReportGenerator(BaseReportGenerator):
         """Load Molmo's model and processor onto the configured device."""
         from transformers import AutoModelForCausalLM, AutoProcessor
 
-        device = self.model_cfg.get("device", "cuda" if torch.cuda.is_available() else "cpu")
+        device_map = self.resolve_device_map()
         dtype = _DTYPE_MAP.get(self.model_cfg.get("dtype", "bfloat16"), torch.bfloat16)
 
-        logger.info("Loading Molmo checkpoint '%s' on %s (%s)", self.checkpoint, device, dtype)
+        logger.info(
+            "Loading Molmo checkpoint '%s' on device_map=%s (%s)", self.checkpoint, device_map, dtype
+        )
 
         self._processor = AutoProcessor.from_pretrained(self.checkpoint, trust_remote_code=True)
 
@@ -57,17 +59,21 @@ class MolmoReportGenerator(BaseReportGenerator):
         # hits the same meta-tensor ".item() cannot be called on meta
         # tensors" failure mode as InternVL under transformers' default
         # low_cpu_mem_usage=True fast-init path -- see models/internvl3.py
-        # for the confirmed root cause. Same fix here, pre-emptively.
-        self._model = (
-            AutoModelForCausalLM.from_pretrained(
-                self.checkpoint,
-                trust_remote_code=True,
-                torch_dtype=dtype,
-                low_cpu_mem_usage=False,
-            )
-            .eval()
-            .to(device)
-        )
+        # for the confirmed root cause. Same fix here, pre-emptively. This
+        # also means from_pretrained's own `device_map` can't be used (it
+        # would force the meta-init path back on) -- place the fully
+        # materialized model via BaseReportGenerator.place_model instead,
+        # which shards across GPUs (accelerate's dispatch_model) without
+        # needing meta-init. Molmo is the largest checkpoint in this
+        # registry (7B, ~14GB in bf16), so this is the model most likely to
+        # actually need both of a Kaggle GPU T4 x2's GPUs.
+        model = AutoModelForCausalLM.from_pretrained(
+            self.checkpoint,
+            trust_remote_code=True,
+            torch_dtype=dtype,
+            low_cpu_mem_usage=False,
+        ).eval()
+        self._model = self.place_model(model, device_map)
 
     def generate(self, image: Image.Image) -> str:
         """Generate a radiology report for a single chest X-ray image.

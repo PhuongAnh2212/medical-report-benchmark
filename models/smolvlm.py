@@ -45,13 +45,15 @@ class SmolVLMReportGenerator(BaseReportGenerator):
         """Load the SmolVLM2 model and processor onto the configured device."""
         from transformers import AutoModelForImageTextToText, AutoProcessor
 
-        device = self.model_cfg.get("device", "cuda" if torch.cuda.is_available() else "cpu")
+        device_map = self.resolve_device_map()
         dtype = _DTYPE_MAP.get(self.model_cfg.get("dtype", "bfloat16"), torch.bfloat16)
         attn_implementation = self.model_cfg.get("attn_implementation")
 
-        logger.info("Loading SmolVLM2 checkpoint '%s' on %s (%s)", self.checkpoint, device, dtype)
+        logger.info(
+            "Loading SmolVLM2 checkpoint '%s' on device_map=%s (%s)", self.checkpoint, device_map, dtype
+        )
 
-        load_kwargs: Dict[str, Any] = dict(torch_dtype=dtype)
+        load_kwargs: Dict[str, Any] = dict(torch_dtype=dtype, device_map=device_map)
         if attn_implementation:
             # Not forced by default: flash_attention_2 requires a matching
             # compiled build that isn't guaranteed to be present (e.g. on
@@ -59,9 +61,7 @@ class SmolVLMReportGenerator(BaseReportGenerator):
             # configs/default.yaml to opt in where available.
             load_kwargs["_attn_implementation"] = attn_implementation
 
-        self._model = AutoModelForImageTextToText.from_pretrained(
-            self.checkpoint, **load_kwargs
-        ).to(device)
+        self._model = AutoModelForImageTextToText.from_pretrained(self.checkpoint, **load_kwargs)
         self._processor = AutoProcessor.from_pretrained(self.checkpoint)
         self._model.eval()
 
