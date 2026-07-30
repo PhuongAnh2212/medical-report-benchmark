@@ -12,10 +12,14 @@
 # ---------------------------------------------------------------------------
 dataset:
   name: "iu_xray"                     # one of: iu_xray, mimic_cxr
-  root_dir: "/kaggle/input/iu-xray"   # root directory containing raw dataset files
-  images_dir: "/kaggle/input/iu-xray/images"
-  reports_csv: "/kaggle/input/iu-xray/reports.csv"
-  split: "test"                       # train | val | test
+  root_dir: null                      # null = auto-detect the Kaggle "chest-xrays-indiana-university"
+                                       # dataset under /kaggle/input/...; set explicitly to override
+                                       # (see datasets/iu_xray.py for the full resolution order)
+  images_dir: null                    # null = auto-detect <root_dir>/images/images_normalized (or /images)
+  reports_csv: null                   # null = auto-detect; set to a legacy pre-processed reports.csv
+                                       # to use the old on-disk format instead of the raw Kaggle CSVs
+  split: "test"                       # train | val | test (only honored for a legacy reports.csv with
+                                       # a `split` column -- the raw Kaggle dataset has no split info)
   max_samples: null                   # null = use all samples, else int for debugging
 
 # ---------------------------------------------------------------------------
