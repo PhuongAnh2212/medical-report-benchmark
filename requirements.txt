@@ -1,6 +1,6 @@
-torch>=2.1.0
-transformers>=4.45.0
-accelerate>=0.34.0
+torch>=2.7.0
+transformers>=4.56.0
+accelerate>=1.0.0
 datasets>=2.20.0
 evaluate>=0.4.2
 pandas>=2.0.0
@@ -15,3 +15,5 @@ sentencepiece>=0.2.0
 qwen-vl-utils>=0.0.8
 einops>=0.8.0
 timm>=1.0.9
+torchvision>=0.18.0
+peft>=0.10.0

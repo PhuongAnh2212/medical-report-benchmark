@@ -71,6 +71,52 @@ class BaseReportGenerator(ABC):
             self.load()
             self._loaded = True
 
+    def unload(self) -> None:
+        """Release the model/processor and free GPU memory, if any was used.
+
+        Concrete default so existing subclasses don't have to implement
+        this; override for model-specific cleanup (e.g. detaching LoRA
+        adapters) and call `super().unload()` at the end. Not called by
+        inference/generate_reports.py, which runs one model per process --
+        provided for callers that load multiple models in one process (e.g.
+        a notebook comparing models back-to-back) and need to free memory
+        between them.
+        """
+        self._model = None
+        self._processor = None
+        self._loaded = False
+        try:
+            import torch
+
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+        except ImportError:
+            pass
+
+    def preprocess_image(self, image: Image.Image) -> Image.Image:
+        """Downscale `image` to a safe pixel budget before model-specific preprocessing.
+
+        An uncapped, full-resolution input image can blow up a VLM's vision
+        token count -- and therefore attention memory -- enough to cause a
+        CUDA OOM even on small checkpoints (observed with multi-megapixel
+        chest X-rays). This is a blunt, model-agnostic PIL-level cap for
+        wrappers whose HF processor doesn't expose a more precise
+        architecture-specific knob (e.g. Qwen2-VL/2.5-VL's min_pixels/
+        max_pixels, applied directly in that wrapper instead). Opt-in --
+        call this from `generate()` only if needed.
+
+        Args:
+            image: RGB PIL Image as loaded by utils.image.load_image.
+
+        Returns:
+            The image, resized if it exceeded `model.max_image_side`
+            (configs/default.yaml; default 1024px on the longest side).
+        """
+        from utils.image import resize_if_needed
+
+        max_side = self.model_cfg.get("max_image_side") or 1024
+        return resize_if_needed(image, max_side=max_side)
+
     def build_prompt(self, extra_context: Optional[str] = None) -> str:
         """Assemble the final text prompt from the template.
 

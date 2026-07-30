@@ -39,11 +39,13 @@ phi4_multimodal:
   module: "models.phi4_mm"
   class_name: "Phi4MMReportGenerator"
   checkpoint: "microsoft/Phi-4-multimodal-instruct"
-  implemented: false
+  implemented: true
+  notes: "Requires transformers>=4.56 for native Phi4MultimodalForCausalLM support and peft for the vision LoRA adapter."
 
 molmo_7b_d:
   display_name: "Molmo-7B-D"
   module: "models.molmo"
   class_name: "MolmoReportGenerator"
   checkpoint: "allenai/Molmo-7B-D-0924"
-  implemented: false
+  implemented: true
+  notes: "7B params -- may not fit alongside activations on <=16GB GPUs (e.g. Kaggle T4). Requires einops and torchvision."

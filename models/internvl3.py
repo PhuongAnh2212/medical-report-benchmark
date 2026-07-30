@@ -1,15 +1,40 @@
 """
 models/internvl3.py
 
-Wrapper for InternVL3 (e.g. OpenGVLab/InternVL3-8B) implementing the
-BaseReportGenerator interface.
+Wrapper for the InternVL2/InternVL3 family (e.g. OpenGVLab/InternVL3-8B,
+OpenGVLab/InternVL2-2B) implementing the BaseReportGenerator interface.
+Both generations share the same custom `trust_remote_code=True` modeling
+code and `model.chat()` API from OpenGVLab, so a single wrapper (selected
+by checkpoint id via configs/models.yaml) covers both -- see the
+`internvl2_2b` and `internvl3` registry entries.
 
-InternVL3 checkpoints are typically loaded via `trust_remote_code=True`
-and use a dynamic-tiling image preprocessing scheme. This wrapper follows
-the reference usage pattern published by OpenGVLab.
+InternVL checkpoints use a dynamic-tiling image preprocessing scheme. This
+wrapper follows the reference usage pattern published by OpenGVLab.
+
+Known issue -- meta tensor crash during load():
+    RuntimeError: Tensor.item() cannot be called on meta tensors
+
+    Root cause: recent `transformers` defaults `low_cpu_mem_usage=True`
+    whenever `accelerate` is installed, which loads the model via
+    accelerate's meta-device fast-init path (parameters/buffers are first
+    created as storage-less meta tensors, then real weights are streamed
+    in). InternVL's own `trust_remote_code` modeling code (specifically
+    `modeling_intern_vit.py`) calls `.item()` on a `torch.linspace(...)`
+    buffer during `__init__`, before that buffer's real weights have been
+    materialized -- which is invalid for a meta tensor. This is a known
+    upstream incompatibility, not something fixable from caller-side
+    generation code: see OpenGVLab/InternVL#1254 and
+    EvolvingLMMs-Lab/lmms-eval#1051.
+
+    Fix: pass `low_cpu_mem_usage=False` to `from_pretrained`, which
+    disables the meta-device fast path and materializes real tensors from
+    the start -- `.item()` then sees real data. This trades a slightly
+    higher peak CPU RAM during load (weights are materialized directly
+    instead of streamed) for correctness; it does not affect the model
+    architecture, GPU memory footprint, or generation quality once loaded.
 
 Requires:
-    pip install transformers accelerate timm einops
+    pip install transformers accelerate timm einops torchvision
 """
 
 from __future__ import annotations
@@ -138,13 +163,18 @@ class InternVL3ReportGenerator(BaseReportGenerator):
         device = self.model_cfg.get("device", "cuda" if torch.cuda.is_available() else "cpu")
         dtype = _DTYPE_MAP.get(self.model_cfg.get("dtype", "bfloat16"), torch.bfloat16)
 
-        logger.info("Loading InternVL3 checkpoint '%s' on %s (%s)", self.checkpoint, device, dtype)
+        logger.info("Loading InternVL checkpoint '%s' on %s (%s)", self.checkpoint, device, dtype)
 
+        # low_cpu_mem_usage=False: see the module docstring -- InternVL's
+        # trust_remote_code modeling code calls .item() on a buffer during
+        # __init__, which crashes ("Tensor.item() cannot be called on meta
+        # tensors") under transformers' default meta-device fast-init path.
         self._model = (
             AutoModel.from_pretrained(
                 self.checkpoint,
                 torch_dtype=dtype,
                 trust_remote_code=True,
+                low_cpu_mem_usage=False,
             )
             .eval()
             .to(device)
