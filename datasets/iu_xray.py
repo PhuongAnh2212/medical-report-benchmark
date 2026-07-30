@@ -247,8 +247,8 @@ def _load_legacy_reports_csv(
     if missing:
         raise ValueError(f"{reports_csv} is missing required columns: {missing}")
 
-    if "split" in df.columns and ds_cfg.get("split"):
-        df = df[df["split"] == ds_cfg["split"]].reset_index(drop=True)
+    reports = pd.read_csv(reports_csv)
+    projections = pd.read_csv(projections_csv)
 
     if "image_path" not in df.columns:
         configured_images_dir = ds_cfg.get("images_dir")
@@ -392,9 +392,31 @@ def load(config: Dict[str, Any]) -> pd.DataFrame:
     df = df.dropna(subset=["ground_truth_report"])
     df = _filter_existing_images(df)
 
+    # Optional: keep only frontal images
+    df = df[df["projection"] == "Frontal"].copy()
+
+    df["image_id"] = df["filename"]
+
+    df["image_path"] = df["filename"].apply(
+        lambda x: str(images_dir / x)
+    )
+
+    # Remove rows where the image doesn't exist
+    df = df[df["image_path"].apply(lambda p: Path(p).exists())]
+
+    df = df[
+        [
+            "image_id",
+            "image_path",
+            "ground_truth_report",
+        ]
+    ]
+
     max_samples = ds_cfg.get("max_samples")
     if max_samples:
-        df = df.head(int(max_samples)).reset_index(drop=True)
+        df = df.head(int(max_samples))
+
+    logger.info("Loaded %d IU X-Ray samples", len(df))
 
     logger.info(
         "Loaded IU X-Ray dataset: %d/%d samples usable (split=%s)",
