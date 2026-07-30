@@ -40,6 +40,17 @@ _DTYPE_MAP = {
     "bfloat16": torch.bfloat16,
 }
 
+# Default vision-token pixel budget passed to the Qwen processor. Both
+# Qwen2-VL and Qwen2.5-VL use a dynamic-resolution vision encoder whose
+# token count (and therefore O(n^2) attention memory) scales directly with
+# input pixel count -- with no cap, a full-resolution chest X-ray (often
+# several megapixels) can blow up to tens of GB of attention memory even on
+# the 2B checkpoint. These values match the Qwen2-VL model card's
+# recommendation for memory-constrained GPUs and bound vision tokens to
+# roughly max_pixels / (28*28).
+_DEFAULT_MIN_PIXELS = 256 * 28 * 28
+_DEFAULT_MAX_PIXELS = 1280 * 28 * 28
+
 # Substring markers used to detect the Qwen VL architecture family from a
 # checkpoint id. Checked in this order; "Qwen2.5-VL" and "Qwen2-VL" never
 # both match a single checkpoint id, so ordering is not load-bearing here,
@@ -113,7 +124,17 @@ class Qwen25VLReportGenerator(BaseReportGenerator):
             torch_dtype=dtype,
             device_map=device,
         )
-        self._processor = AutoProcessor.from_pretrained(self.checkpoint)
+
+        # Bound vision tokens so a large input image can't blow up attention
+        # memory (see CUDA OOM note above). `model.min_pixels`/`max_pixels`
+        # in configs/default.yaml can override these per-GPU if needed.
+        min_pixels = self.model_cfg.get("min_pixels") or _DEFAULT_MIN_PIXELS
+        max_pixels = self.model_cfg.get("max_pixels") or _DEFAULT_MAX_PIXELS
+        logger.info("Vision token pixel budget: min_pixels=%d, max_pixels=%d", min_pixels, max_pixels)
+
+        self._processor = AutoProcessor.from_pretrained(
+            self.checkpoint, min_pixels=min_pixels, max_pixels=max_pixels
+        )
         self._model.eval()
 
     def generate(self, image: Image.Image) -> str:
