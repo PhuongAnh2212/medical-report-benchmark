@@ -36,48 +36,63 @@ REQUIRED_COLUMNS = {"image_id", "report"}
 
 
 def load(config: Dict[str, Any]) -> pd.DataFrame:
-    """Load the IU X-Ray dataset into a standardized DataFrame.
+    """Load the Kaggle Indiana University Chest X-Ray dataset."""
 
-    Args:
-        config: Full benchmark config; uses the `dataset` section.
-
-    Returns:
-        DataFrame with columns [image_id, image_path, ground_truth_report].
-
-    Raises:
-        FileNotFoundError: If reports_csv does not exist.
-        ValueError: If required columns are missing from reports_csv.
-    """
     ds_cfg = config["dataset"]
-    reports_csv = os.path.join(root, "indiana_reports.csv")
-    projections_csv = os.path.join(root, "indiana_projections.csv")
-    images_dir = resolve_path(ds_cfg["images_dir"])
+
+    root = resolve_path(ds_cfg["root_dir"])
+    images_dir = root / "images"
+
+    reports_csv = root / "indiana_reports.csv"
+    projections_csv = root / "indiana_projections.csv"
 
     if not reports_csv.exists():
-        raise FileNotFoundError(
-            f"IU X-Ray reports CSV not found at {reports_csv}. "
-            "See notebooks/01_download_dataset.ipynb for setup instructions."
-        )
+        raise FileNotFoundError(f"Cannot find {reports_csv}")
 
-    df = pd.read_csv(reports_csv)
-    missing = REQUIRED_COLUMNS - set(df.columns)
-    if missing:
-        raise ValueError(f"reports.csv is missing required columns: {missing}")
+    if not projections_csv.exists():
+        raise FileNotFoundError(f"Cannot find {projections_csv}")
 
-    if "split" in df.columns and ds_cfg.get("split"):
-        df = df[df["split"] == ds_cfg["split"]].reset_index(drop=True)
+    reports = pd.read_csv(reports_csv)
+    projections = pd.read_csv(projections_csv)
 
-    if "image_path" not in df.columns:
-        df["image_path"] = df["image_id"].apply(lambda fname: str(images_dir / fname))
+    # Build the ground-truth report
+    reports["ground_truth_report"] = (
+        reports["findings"].fillna("").str.strip()
+        + "\n"
+        + reports["impression"].fillna("").str.strip()
+    ).str.strip()
 
-    df = df.rename(columns={"report": "ground_truth_report"})
-    df = df[["image_id", "image_path", "ground_truth_report"]].dropna(
-        subset=["ground_truth_report"]
+    # Merge reports with image filenames
+    df = projections.merge(
+        reports[["uid", "ground_truth_report"]],
+        on="uid",
+        how="inner",
     )
+
+    # Optional: keep only frontal images
+    df = df[df["projection"] == "Frontal"].copy()
+
+    df["image_id"] = df["filename"]
+
+    df["image_path"] = df["filename"].apply(
+        lambda x: str(images_dir / x)
+    )
+
+    # Remove rows where the image doesn't exist
+    df = df[df["image_path"].apply(lambda p: Path(p).exists())]
+
+    df = df[
+        [
+            "image_id",
+            "image_path",
+            "ground_truth_report",
+        ]
+    ]
 
     max_samples = ds_cfg.get("max_samples")
     if max_samples:
-        df = df.head(int(max_samples)).reset_index(drop=True)
+        df = df.head(int(max_samples))
 
-    logger.info("Loaded IU X-Ray dataset: %d samples (split=%s)", len(df), ds_cfg.get("split"))
+    logger.info("Loaded %d IU X-Ray samples", len(df))
+
     return df.reset_index(drop=True)
