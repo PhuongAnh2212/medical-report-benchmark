@@ -1,0 +1,75 @@
+# =============================================================================
+# default.yaml
+#
+# Global configuration for the medical-report-benchmark framework.
+# All paths are relative to the repository root or to /kaggle/working when
+# running on Kaggle. Nothing in the codebase should hardcode paths outside
+# of what is defined here.
+# =============================================================================
+
+# ---------------------------------------------------------------------------
+# Dataset selection and paths
+# ---------------------------------------------------------------------------
+dataset:
+  name: "iu_xray"                     # one of: iu_xray, mimic_cxr
+  root_dir: "/kaggle/input/iu-xray"   # root directory containing raw dataset files
+  images_dir: "/kaggle/input/iu-xray/images"
+  reports_csv: "/kaggle/input/iu-xray/reports.csv"
+  split: "test"                       # train | val | test
+  max_samples: null                   # null = use all samples, else int for debugging
+
+# ---------------------------------------------------------------------------
+# Model selection
+# ---------------------------------------------------------------------------
+model:
+  name: "qwen25_vl"                   # must match a key in configs/models.yaml
+  device: "cuda"                      # cuda | cpu | mps
+  dtype: "bfloat16"                   # float32 | float16 | bfloat16
+  batch_size: 1                       # most VLMs are run with batch_size=1 for simplicity
+  max_new_tokens: 512
+  temperature: 0.2
+  top_p: 0.9
+  do_sample: false
+
+# ---------------------------------------------------------------------------
+# Prompting
+# ---------------------------------------------------------------------------
+prompt:
+  template_file: "prompts/report_generation.txt"
+  strategy: "zero_shot"               # zero_shot | cot | self_refine
+
+# ---------------------------------------------------------------------------
+# Inference / output
+# ---------------------------------------------------------------------------
+inference:
+  output_dir: "outputs/predictions"
+  output_filename: "{model_name}_predictions.csv"
+  save_every_n: 20                    # checkpoint predictions.csv every N samples
+  resume: true                        # skip already-generated image_ids if file exists
+
+# ---------------------------------------------------------------------------
+# Evaluation
+# ---------------------------------------------------------------------------
+evaluation:
+  predictions_dir: "outputs/predictions"
+  results_dir: "results"
+  metrics:
+    - bleu
+    - rouge
+    - meteor
+    - cider
+    # future: chexbert, radgraph (see metrics/chexbert.py, metrics/radgraph.py)
+
+leaderboard:
+  results_dir: "results"
+  output_file: "results/leaderboard.csv"
+  sort_by: "BLEU-4"
+  ascending: false
+
+# ---------------------------------------------------------------------------
+# Logging
+# ---------------------------------------------------------------------------
+logging:
+  level: "INFO"                       # DEBUG | INFO | WARNING | ERROR
+  log_dir: "outputs/logs"
+  log_to_file: true

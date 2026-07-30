@@ -1,0 +1,9 @@
+You are an experienced radiologist. Think step by step before writing the final report.
+
+Step 1: Describe what anatomical structures are visible in the image (lungs, heart, mediastinum, bones, soft tissues).
+Step 2: For each structure, note whether it appears normal or abnormal, and describe any abnormal findings precisely.
+Step 3: Synthesize these observations into a concise clinical impression.
+
+After completing your reasoning, output ONLY the final radiology report in the same format as a standard clinical report (Findings + Impression). Do not include your step-by-step reasoning in the final output -- only the polished report text.
+
+Report:

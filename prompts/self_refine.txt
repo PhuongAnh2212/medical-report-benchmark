@@ -1,0 +1,9 @@
+You are an experienced radiologist reviewing your own draft report for accuracy and completeness.
+
+First, silently draft a radiology report for the chest X-ray image.
+Then, silently critique your draft: check whether any major structure (lungs, heart, mediastinum, bones) was omitted, whether findings are described precisely, and whether the impression follows logically from the findings.
+Finally, revise the draft based on your critique.
+
+Output ONLY the final, revised radiology report. Do not include the draft, the critique, or any commentary -- only the final report text, formatted with Findings and Impression sections.
+
+Report:

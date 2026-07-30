@@ -1,0 +1,54 @@
+# =============================================================================
+# models.yaml
+#
+# Registry of all supported Vision-Language Models. Each entry defines the
+# HuggingFace checkpoint, the Python class implementing the model, and any
+# model-specific defaults. `inference/generate_reports.py` looks up the
+# `model.name` field from default.yaml (or a CLI override) in this file.
+#
+# To add a new model:
+#   1. Add an entry here.
+#   2. Implement a class in models/<your_model>.py that subclasses
+#      models.base_model.BaseReportGenerator.
+#   3. Register the class in models/__init__.py's MODEL_REGISTRY.
+# =============================================================================
+
+qwen25_vl:
+  display_name: "Qwen2.5-VL-7B-Instruct"
+  module: "models.qwen25_vl"
+  class_name: "Qwen25VLReportGenerator"
+  checkpoint: "Qwen/Qwen2.5-VL-7B-Instruct"
+  implemented: true
+  notes: "Requires qwen-vl-utils for image preprocessing."
+
+internvl3:
+  display_name: "InternVL3-8B"
+  module: "models.internvl3"
+  class_name: "InternVL3ReportGenerator"
+  checkpoint: "OpenGVLab/InternVL3-8B"
+  implemented: true
+  notes: "Uses dynamic tiling preprocessing as per InternVL docs."
+
+minicpm_v:
+  display_name: "MiniCPM-V-2.6"
+  module: "models.minicpm_v"
+  class_name: "MiniCPMVReportGenerator"
+  checkpoint: "openbmb/MiniCPM-V-2_6"
+  implemented: false
+  notes: "Placeholder. Implement load()/generate() following BaseReportGenerator."
+
+llava_med:
+  display_name: "LLaVA-Med-v1.5"
+  module: "models.llava_med"
+  class_name: "LLaVAMedReportGenerator"
+  checkpoint: "microsoft/llava-med-v1.5-mistral-7b"
+  implemented: false
+  notes: "Placeholder. LLaVA-Med requires custom model code; see README for setup."
+
+chexagent:
+  display_name: "CheXagent-8b"
+  module: "models.chexagent"
+  class_name: "CheXagentReportGenerator"
+  checkpoint: "StanfordAIMI/CheXagent-8b"
+  implemented: false
+  notes: "Placeholder. Domain-specific CXR foundation model."

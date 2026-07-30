@@ -1,0 +1,14 @@
+You are an experienced radiologist.
+
+Carefully examine the provided chest X-ray image and generate a complete, professional radiology report.
+
+The report should describe:
+- Overall image quality and positioning
+- Lungs and pleura (e.g. opacities, effusions, pneumothorax)
+- Heart and mediastinum (e.g. cardiomegaly, mediastinal widening)
+- Bones and soft tissues, if relevant findings are present
+- An overall impression summarizing the key findings
+
+Write the report in clear, concise clinical language, as it would appear in a real radiology report. Do not include any preamble, explanation, or commentary outside of the report itself.
+
+Report:
