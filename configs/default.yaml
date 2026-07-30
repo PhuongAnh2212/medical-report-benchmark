@@ -11,10 +11,12 @@
 # Dataset selection and paths
 # ---------------------------------------------------------------------------
 dataset:
-  name: "iu_xray"                     # one of: iu_xray, mimic_cxr
-  root_dir: "/kaggle/input/iu-xray"   # root directory containing raw dataset files
-  images_dir: "/kaggle/input/iu-xray/images"
-  reports_csv: "/kaggle/input/iu-xray/reports.csv"
+  # name: "iu_xray"                     # one of: iu_xray, mimic_cxr
+  root_dir: "/kaggle/input/datasets/raddar/chest-xrays-indiana-university"
+
+  images_dir: "/kaggle/input/datasets/raddar/chest-xrays-indiana-university/images"
+
+  reports_csv: "/kaggle/input/datasets/raddar/chest-xrays-indiana-university/indiana_reports.csv"
   split: "test"                       # train | val | test
   max_samples: null                   # null = use all samples, else int for debugging
 
