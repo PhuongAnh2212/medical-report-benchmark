@@ -313,6 +313,16 @@ def _load_kaggle_raw(root: Path, ds_cfg: Dict[str, Any]) -> pd.DataFrame:
     merged = merged.rename(columns={"filename": "image_id"})
     merged["image_path"] = merged["image_id"].apply(lambda fname: str(images_dir / fname))
 
+    # `projection` (Frontal/Lateral) must still be present on `merged` at this
+    # point -- it is only used here, immediately after the merge, and is
+    # dropped by the final column selection below.
+    if ds_cfg.get("frontal_only"):
+        before = len(merged)
+        merged = merged[merged["projection"] == "Frontal"].copy()
+        logger.info(
+            "dataset.frontal_only=True: kept %d/%d Frontal images.", len(merged), before
+        )
+
     if ds_cfg.get("split"):
         logger.warning(
             "dataset.split=%r was requested, but the raw Kaggle IU X-Ray "
@@ -324,6 +334,8 @@ def _load_kaggle_raw(root: Path, ds_cfg: Dict[str, Any]) -> pd.DataFrame:
             len(merged),
         )
 
+    # Only now, after any projection-based filtering, do we reduce to the
+    # standard interface columns expected by the rest of the benchmark.
     return merged[["image_id", "image_path", "ground_truth_report"]]
 
 
