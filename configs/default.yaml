@@ -20,6 +20,8 @@ dataset:
                                        # to use the old on-disk format instead of the raw Kaggle CSVs
   split: "test"                       # train | val | test (only honored for a legacy reports.csv with
                                        # a `split` column -- the raw Kaggle dataset has no split info)
+  frontal_only: false                 # true = keep only Frontal-projection images (IU X-Ray studies
+                                       # often include a Lateral view too); false = keep every image
   max_samples: null                   # null = use all samples, else int for debugging
 
 # ---------------------------------------------------------------------------
