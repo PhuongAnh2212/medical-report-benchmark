@@ -119,11 +119,14 @@ class Qwen25VLReportGenerator(BaseReportGenerator):
 
         logger.info("Loading checkpoint '%s' on device_map=%s (%s)", self.checkpoint, device_map, dtype)
 
-        self._model = model_class.from_pretrained(
-            self.checkpoint,
-            torch_dtype=dtype,
-            device_map=device_map,
-        )
+        load_kwargs: Dict[str, Any] = dict(torch_dtype=dtype, device_map=device_map)
+        attn_implementation = self.resolve_attn_implementation()
+        if attn_implementation:
+            # Opt-in via model.attn_implementation (configs/h100.yaml sets
+            # flash_attention_2); null keeps transformers' default.
+            load_kwargs["attn_implementation"] = attn_implementation
+
+        self._model = model_class.from_pretrained(self.checkpoint, **load_kwargs)
 
         # Bound vision tokens so a large input image can't blow up attention
         # memory (see CUDA OOM note above). `model.min_pixels`/`max_pixels`

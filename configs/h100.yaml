@@ -1,0 +1,105 @@
+# =============================================================================
+# h100.yaml
+#
+# Configuration for running the benchmark on a single NVIDIA H100 (80GB)
+# server instead of Kaggle's T4s. Identical to default.yaml except:
+#   - dataset.root_dir must point at your local copy of the IU X-Ray dataset
+#     (Kaggle /kaggle/input auto-detection doesn't apply off-Kaggle);
+#   - model.device_map pins each run to ONE GPU -- every registered model
+#     fits easily in 80GB, and sharding a 2-8B model across GPUs only adds
+#     inter-GPU latency. On a multi-H100 node, run one model per GPU in
+#     parallel with CUDA_VISIBLE_DEVICES instead (see README);
+#   - model.attn_implementation enables FlashAttention-2 (Hopper-supported;
+#     falls back to sdpa automatically if flash-attn isn't installed).
+#
+# Image-resolution budgets (min_pixels/max_pixels/max_image_side) are
+# deliberately left at the default.yaml values: they change what the model
+# sees, not just memory use, so raising them would make H100 results
+# incomparable with runs made under default.yaml.
+#
+# Usage:
+#   python -m inference.generate_reports --model qwen2_vl_2b --config configs/h100.yaml
+# =============================================================================
+
+# ---------------------------------------------------------------------------
+# Dataset selection and paths
+# ---------------------------------------------------------------------------
+dataset:
+  name: "iu_xray"                     # one of: iu_xray, mimic_cxr
+  root_dir: "/data/chest-xrays-indiana-university"  # EDIT ME: local dataset root containing
+                                       # indiana_reports.csv, indiana_projections.csv, images/
+                                       # (download: kaggle datasets download -d raddar/chest-xrays-indiana-university)
+  images_dir: null                    # null = auto-detect <root_dir>/images/images_normalized (or /images)
+  reports_csv: null                   # null = auto-detect; set to a legacy pre-processed reports.csv
+                                       # to use the old on-disk format instead of the raw Kaggle CSVs
+  split: "test"                       # train | val | test (only honored for a legacy reports.csv with
+                                       # a `split` column -- the raw Kaggle dataset has no split info)
+  frontal_only: false                 # true = keep only Frontal-projection images (IU X-Ray studies
+                                       # often include a Lateral view too); false = keep every image
+  max_samples: null                   # null = use all samples, else int for debugging
+
+# ---------------------------------------------------------------------------
+# Model selection
+# ---------------------------------------------------------------------------
+model:
+  name: "qwen25_vl"                   # must match a key in configs/models.yaml
+  device: "cuda"                      # cuda | cpu | mps
+  device_map: "cuda:0"                # one H100 per run; select which physical GPU with
+                                       # CUDA_VISIBLE_DEVICES rather than editing this. Set to "auto"
+                                       # only for checkpoints too large for a single 80GB card.
+  dtype: "bfloat16"                   # float32 | float16 | bfloat16
+  batch_size: 1                       # most VLMs are run with batch_size=1 for simplicity
+  max_new_tokens: 512
+  temperature: 0.2
+  top_p: 0.9
+  do_sample: false
+  min_pixels: null                    # Qwen2-VL/2.5-VL only; null = wrapper default (256*28*28)
+  max_pixels: null                    # Qwen2-VL/2.5-VL only; null = wrapper default (1280*28*28)
+                                       # lower this further (e.g. 768*28*28) if you still hit CUDA OOM
+  max_image_side: null                # smolvlm2/phi4_multimodal/molmo_7b_d only; null = 1024px default
+                                       # (see BaseReportGenerator.preprocess_image); lower if still OOMing
+  attn_implementation: "flash_attention_2"  # qwen2_vl_2b/qwen25_vl_7b/smolvlm2; requires
+                                       # `pip install flash-attn --no-build-isolation`, else sdpa is used
+
+# ---------------------------------------------------------------------------
+# Prompting
+# ---------------------------------------------------------------------------
+prompt:
+  template_file: "prompts/report_generation.txt"
+  strategy: "zero_shot"               # zero_shot | cot | self_refine
+
+# ---------------------------------------------------------------------------
+# Inference / output
+# ---------------------------------------------------------------------------
+inference:
+  output_dir: "outputs/predictions"
+  output_filename: "{model_name}_predictions.csv"
+  save_every_n: 20                    # checkpoint predictions.csv every N samples
+  resume: true                        # skip already-generated image_ids if file exists
+
+# ---------------------------------------------------------------------------
+# Evaluation
+# ---------------------------------------------------------------------------
+evaluation:
+  predictions_dir: "outputs/predictions"
+  results_dir: "results"
+  metrics:
+    - bleu
+    - rouge
+    - meteor
+    - cider
+    # future: chexbert, radgraph (see metrics/chexbert.py, metrics/radgraph.py)
+
+leaderboard:
+  results_dir: "results"
+  output_file: "results/leaderboard.csv"
+  sort_by: "BLEU-4"
+  ascending: false
+
+# ---------------------------------------------------------------------------
+# Logging
+# ---------------------------------------------------------------------------
+logging:
+  level: "INFO"                       # DEBUG | INFO | WARNING | ERROR
+  log_dir: "outputs/logs"
+  log_to_file: true

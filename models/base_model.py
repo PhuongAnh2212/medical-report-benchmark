@@ -123,6 +123,31 @@ class BaseReportGenerator(ABC):
             return "auto"
         return device
 
+    def resolve_attn_implementation(self) -> Optional[str]:
+        """Resolve `model.attn_implementation`, degrading gracefully if unavailable.
+
+        `"flash_attention_2"` (the H100 config's choice -- see
+        configs/h100.yaml) needs the separately compiled `flash-attn`
+        package; if it isn't importable, fall back to PyTorch's built-in
+        `"sdpa"` kernel with a warning instead of letting `from_pretrained`
+        raise, so the same config still runs on machines without it.
+
+        Returns:
+            The attention implementation to pass to `from_pretrained`, or
+            None to let `transformers` pick its default.
+        """
+        attn_implementation = self.model_cfg.get("attn_implementation")
+        if attn_implementation == "flash_attention_2":
+            import importlib.util
+
+            if importlib.util.find_spec("flash_attn") is None:
+                logger.warning(
+                    "model.attn_implementation='flash_attention_2' but flash-attn is not "
+                    "installed; falling back to 'sdpa'."
+                )
+                return "sdpa"
+        return attn_implementation
+
     def place_model(self, model: Any, device_map: Any) -> Any:
         """Place an already-materialized model onto `device_map`.
 

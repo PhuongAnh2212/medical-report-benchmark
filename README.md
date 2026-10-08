@@ -245,6 +245,39 @@ doesn't provide. Resolution priority is:
    - `05_evaluate.ipynb` — compute BLEU/ROUGE/METEOR/CIDEr for every predictions file.
    - `06_build_leaderboard.ipynb` — aggregate results into `results/leaderboard.csv` and plot.
 
+## H100 Server Setup
+
+`configs/h100.yaml` is `default.yaml` adapted for a single NVIDIA H100 (80GB): each run is
+pinned to one GPU (`device_map: "cuda:0"`), FlashAttention-2 is enabled, and
+`dataset.root_dir` points at a local copy of the dataset instead of `/kaggle/input`.
+Image-resolution budgets are unchanged, so scores stay comparable with Kaggle runs.
+
+```bash
+# 1. Environment (CUDA 12.x driver; H100 needs a CUDA 12 build of PyTorch)
+pip install -r requirements.txt
+pip install flash-attn --no-build-isolation   # optional; sdpa is used if missing
+
+# 2. Dataset (needs ~/.kaggle/kaggle.json), then set dataset.root_dir in configs/h100.yaml
+kaggle datasets download -d raddar/chest-xrays-indiana-university -p /data/chest-xrays-indiana-university --unzip
+
+# 3. Smoke test, then full run
+python -m inference.generate_reports --model qwen2_vl_2b --config configs/h100.yaml --max-samples 10
+python -m inference.generate_reports --model qwen2_vl_2b --config configs/h100.yaml
+```
+
+Every registered model fits in 80GB, including the larger `qwen25_vl_7b`, `internvl3_8b`
+and `molmo_7b_d`. On a node with several H100s, run one model per GPU in parallel rather
+than sharding one model across them. Use different `--model` values so the runs write to
+different predictions files:
+
+```bash
+CUDA_VISIBLE_DEVICES=0 python -m inference.generate_reports --model qwen25_vl_7b --config configs/h100.yaml &
+CUDA_VISIBLE_DEVICES=1 python -m inference.generate_reports --model internvl3_8b --config configs/h100.yaml &
+```
+
+The 2B models leave most of a single H100 idle at `batch_size: 1`. You can also run two or
+three of them at the same time on one GPU.
+
 ## Running Inference
 
 ```bash
@@ -281,7 +314,7 @@ automatically if interrupted (`inference.resume: true` in `configs/default.yaml`
 | `max_new_tokens`, `temperature`, `top_p`, `do_sample` | see file | all | standard generation params |
 | `min_pixels`, `max_pixels` | `null` | `qwen2_vl_2b` | Vision-token pixel budget; `null` = wrapper default (`256*28*28` / `1280*28*28`). Lower `max_pixels` (e.g. `768*28*28`) if you hit CUDA OOM — full-resolution X-rays can otherwise blow up attention memory even on a 2B model. |
 | `max_image_side` | `null` | `smolvlm2`, `phi4_multimodal`, `molmo_7b_d` | Blunter PIL-level resize cap (`BaseReportGenerator.preprocess_image`); `null` = 1024px on the longest side. Lower it if you still hit CUDA OOM. |
-| `attn_implementation` | `null` | `smolvlm2` | e.g. `"flash_attention_2"` if installed; leave `null` to let `transformers` pick automatically (safer default — flash-attn isn't guaranteed to be compiled in every environment). |
+| `attn_implementation` | `null` | `qwen2_vl_2b`, `qwen25_vl_7b`, `smolvlm2` | e.g. `"flash_attention_2"` (set in `configs/h100.yaml`); falls back to `"sdpa"` with a warning if `flash-attn` isn't installed. `null` lets `transformers` pick. |
 
 ### Troubleshooting
 

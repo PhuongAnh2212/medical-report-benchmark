@@ -47,7 +47,7 @@ class SmolVLMReportGenerator(BaseReportGenerator):
 
         device_map = self.resolve_device_map()
         dtype = _DTYPE_MAP.get(self.model_cfg.get("dtype", "bfloat16"), torch.bfloat16)
-        attn_implementation = self.model_cfg.get("attn_implementation")
+        attn_implementation = self.resolve_attn_implementation()
 
         logger.info(
             "Loading SmolVLM2 checkpoint '%s' on device_map=%s (%s)", self.checkpoint, device_map, dtype

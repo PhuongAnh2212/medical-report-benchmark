@@ -49,3 +49,21 @@ molmo_7b_d:
   checkpoint: "allenai/Molmo-7B-D-0924"
   implemented: true
   notes: "7B params -- may not fit alongside activations on <=16GB GPUs (e.g. Kaggle T4). Requires einops and torchvision."
+
+# --- Larger checkpoints: need a >=40GB GPU (e.g. H100 80GB, see configs/h100.yaml) ---
+
+qwen25_vl_7b:
+  display_name: "Qwen2.5-VL-7B-Instruct"
+  module: "models.qwen25_vl"
+  class_name: "Qwen25VLReportGenerator"
+  checkpoint: "Qwen/Qwen2.5-VL-7B-Instruct"
+  implemented: true
+  notes: "~16GB in bf16. Architecture auto-detected as Qwen2.5-VL by models/qwen25_vl.py."
+
+internvl3_8b:
+  display_name: "InternVL3-8B"
+  module: "models.internvl3"
+  class_name: "InternVL3ReportGenerator"
+  checkpoint: "OpenGVLab/InternVL3-8B"
+  implemented: true
+  notes: "~16GB in bf16. Same trust_remote_code .chat() API as InternVL2 (models/internvl3.py)."
